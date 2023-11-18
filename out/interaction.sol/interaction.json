@@ -1,0 +1,34 @@
+{
+  "abi": [],
+  "bytecode": {
+    "object": "0x",
+    "linkReferences": {}
+  },
+  "deployedBytecode": {
+    "object": "0x",
+    "linkReferences": {}
+  },
+  "ast": {
+    "absolutePath": "script/interaction.sol",
+    "id": 4,
+    "exportedSymbols": {},
+    "nodeType": "SourceUnit",
+    "src": "39:210:1",
+    "nodes": [
+      {
+        "id": 3,
+        "nodeType": "PragmaDirective",
+        "src": "39:24:1",
+        "nodes": [],
+        "literals": [
+          "solidity",
+          "^",
+          "0.8",
+          ".21"
+        ]
+      }
+    ],
+    "license": "UNLICENSED"
+  },
+  "id": 1
+}
