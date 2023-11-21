@@ -20,8 +20,8 @@ abstract contract View is handler {
         return _owner;
     }
 
-    function warpper() external view returns (address) {
-        return address(WARPPER);
+    function wrapper() external view returns (address) {
+        return address(WRAPPER);
     }
 
     function localChainId() external view returns (uint16) {

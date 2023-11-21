@@ -1,121 +1,108 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.21;
 
-// import {Script, console2} from "forge-std/Script.sol";
-// import "../src/Counter.sol";
+import {Script, console2} from "forge-std/Script.sol";
+import "forge-std//StdJson.sol";
+import "../src/delivery/delivery.sol";
+import "../src/wrapper/wrapper.sol";
+import "../src/Htoken/Htoken.sol";
 
-// contract deployCounter is Script {
-//     // deploy the contract on : sepolia , arbi , bsc
-//     // get the rpc :
+contract deploy is Script {
+    // deploy the contract on : sepolia , arbi , bsc
+    // get the rpc :
+    using stdJson for string;
+    function setUp() public {}
 
-//     function setUp() public {}
+    // run this script once for each network . 
+    function run() public {
+        // get the current network name and chain id (chainId of layerzero not the real one, it's stored on json file) 
+        (string memory network,uint16 chainid,string memory json) = _getNetwork();
 
-//     function run() public {
-//         uint256 pk = vm.envUint("private_key");
-//         uint256 chainId;
-//         assembly {
-//             chainId := chainid()
-//         }
-//         string memory network;
-//         if (chainId == 32337) network = "local_host";
-//         else if (chainId == 11155111) network = "sepolia";
-//         else if (chainId == 420) network = "optimism";
-//         else if (chainId == 421613) network = "arbitrum";
-//         else if (chainId == 80001) network = "mumbai";
-//         string memory json = vm.readFile("./jss/refrences.json");
-//         address endpoint = vm.parseJsonAddress(json, string.concat(".", network, ".endpoint"));
-//         vm.startBroadcast(pk);
-//         //get the address of the endpoint :
-//         crossChainCounter counter = new crossChainCounter(endpoint);
-//         vm.stopBroadcast();
-//         console.log(address(counter));
-//         console.log(network);
-//     }
+        address endpoint = vm.parseJsonAddress(json, string.concat(".testnet.", network, ".endpoint"));
+        
+        // start broadcasting .. 
+        vm.startBroadcast();
+            // deploy delivery contracts : 
+            Delivery delivery = new Delivery(endpoint,chainid);
+            // deploy Htoken implemantation: 
+            Htoken token = new Htoken();
+            // deploy Wrapper contract  : 
+            Wrapper wrapper = new Wrapper(address(token),chainid,address(delivery));
+            console2.log(network);
+            string memory deliv = string.concat(".testnet.",network,".delivery");
+            string memory wrap = string.concat(".testnet.",network,".wrapper");
+            console2.log(deliv,"\n",wrap);
+            vm.writeJson(vm.toString(address(delivery)),"./L0_refrences/refrences.json",deliv);
+             vm.writeJson(vm.toString(address(wrapper)),"./L0_refrences/refrences.json",wrap);
+            vm.stopBroadcast();
+              
+    }
 
-//     function writeToJson(uint256 chainId, address c23) public {
-//         string memory network;
-//         console2.log("the address at ", chainId, "\n is ", c23);
-//         string memory chainid = vm.serializeUint(network, "chainId", chainId);
-//         string memory addr = vm.serializeAddress(network, "address", c23);
-//         string memory jsonObj = vm.serializeString(chainid, network, addr);
-//         vm.writeJson(jsonObj, "./jss/jsonRef.json", network);
-//     }
-// }
+    string[] networks = ["sepolia","arbitrum","mumbai","optimism"];
+    // after full deployment ... run this one time for each network (chain);
 
-// contract setConfig is Script {
-//     address sepolia = 0x7c09ed7DE2d1D5FD629EC6D5e75213cA1d453B3e;
-//     address arbitrum = 0xcEe82EA5a32bD8D54220Af410BA9E37b9F2e460d;
-//     address mumbai = 0xf4b6c842193EAfED9B643df2b79Cff53DCCed243;
+    // @todo : set gas limit ....
+    function gaslimitConfig() public {
 
-//     function run() public {
-//         uint256 pk = vm.envUint("private_key");
-//         uint256 chainId;
-//         assembly {
-//             chainId := chainid()
-//         }
-//         string memory network;
-//         address localAddr;
-//         if (chainId == 11155111) {
-//             network = "sepolia";
-//             localAddr = sepolia;
-//         } else if (chainId == 421613) {
-//             network = "arbitrum";
-//             localAddr = arbitrum;
-//         } else if (chainId == 80001) {
-//             network = "mumbai";
-//             localAddr = mumbai;
-//         }
-//         string memory json = vm.readFile("./jss/refrences.json");
-//         console.log(localAddr);
-//         string memory remoteKey;
-//         if (localAddr == mumbai) remoteKey = "arbitrum";
-//         else if (localAddr == arbitrum) remoteKey = "mumbai";
-//         uint16 chainid = uint16(vm.parseJsonUint(json, string.concat(".", remoteKey, ".chainId")));
-//         address remoteAddr = localAddr == arbitrum ? mumbai : arbitrum;
-//         console.log(chainid);
-//         console.log("should be arbi", network);
-//         console.log("should be mumbai", remoteKey);
+    }
+    function config() public {
+        vm.startBroadcast();
+        (string memory network,uint chainid,string memory json) = _getNetwork();
+        // set wrapper : 
+        address wrapper = vm.parseJsonAddress(json,string.concat(".testnet.",network,".wrapper"));
+        address delivery = vm.parseJsonAddress(json,string.concat(".testnet.",network,".delivery"));
+        Delivery(delivery).setWraper(wrapper);
+        for(uint i; i< 4;i++){
+            // loop through all chains and config all  all deliveries in all chains 
+            uint16 chainId = uint16(vm.parseJsonUint(json,string.concat(".testnet.",networks[i],".chainId")));
+            if (chainId == chainid) continue; // skip when the chain id is local .. 
+            address remoteDelivery;
+            try  vm.parseJsonAddress(json,string.concat(".testnet.",networks[i],".delivery")) returns(address add){
+               remoteDelivery = add;
+            }catch{continue;}
+            // skip if now delivery address deployed in this network .
+            Delivery(delivery).addRemoteAddress(chainId,remoteDelivery);
+        }
+    }
+    address chainLink  = 0xd14838A68E8AFBAdE5efb411d5871ea0011AFd28;
 
-//         vm.startBroadcast(pk);
-//         crossChainCounter(payable(localAddr)).setAddress(chainid, remoteAddr);
-//         vm.stopBroadcast();
-//     }
-// }
+    function wrapAndSend() public {
+        // wrap chain link token :
+        vm.startBroadcast();
+        (string memory network,uint16 chainid,string memory json) = _getNetwork();
+        // set wrapper : 
+        address wrapper = vm.parseJsonAddress(json,string.concat(".testnet.",network,".wrapper"));
+        uint bal = Htoken(chainLink).balanceOf(msg.sender);// this will be my address . 
+        Htoken(chainLink).approve(address(wrapper),bal);
+        Wrapper(wrapper).wrap(chainLink,bal,msg.sender);
+        address htoken = Wrapper(wrapper).getHtoken(chainLink,chainid);
+        // catch the balance before : 
+        console2.log("balance in arbitrum before: ",Htoken(htoken).balanceOf(msg.sender));
+        // estimate fee : 
+        (uint fee,) = Htoken(htoken).estimateTransferFee(false,10161,msg.sender,bal/2);//sepolia chain id : 10161
+        // send a cross chain transfer : 
+        Htoken(htoken).send{value:fee}(10161,msg.sender,bal/2,false);
+        console2.log("balance in arbitrum after: ",Htoken(htoken).balanceOf(msg.sender));
 
-// interface C23 {
-//     function send(uint16 chainId, bool inn, uint256 rounds) external payable;
-//     function estimate_fee(uint16 chainId, bool inn, uint256 rounds) external view returns (uint256 fees);
-// }
+    }
 
-// contract increment is Script {
-//     address sepolia = 0x7c09ed7DE2d1D5FD629EC6D5e75213cA1d453B3e;
-//     address arbitrum = 0xcEe82EA5a32bD8D54220Af410BA9E37b9F2e460d;
-//     address mumbai = 0xf4b6c842193EAfED9B643df2b79Cff53DCCed243;
+    //////////////////// helper functions ////////////////////////// 
 
-//     C23 c23;
+    function _getNetwork() internal view returns(string memory network,uint16 chainid,string memory json){
+         uint _chainId;
+        assembly {
+            _chainId := chainid()
+        }
+        if (_chainId == 32337) network = "local_host";
+        else if (_chainId == 11155111) network = "sepolia";
+        else if (_chainId == 420) network = "optimism";
+        else if (_chainId == 421613) network = "arbitrum";
+        else if (_chainId == 80001) network = "mumbai";
 
-//     function run() public {
-//         uint256 chainId;
-//         assembly {
-//             chainId := chainid()
-//         }
-//         uint16 id = chainId == 80001 ? 10143 : 10109;
-//         address addrC23 = chainId == 80001 ? mumbai : arbitrum;
-//         c23 = C23(payable(addrC23));
-//         // estimate gas first :
-//         uint256 pk = vm.envUint("private_key");
-//         address caller = vm.addr(pk);
-//         uint256 fees = c23.estimate_fee(id, true, 11);
-//         console.log("fees :", fees);
-//         console.log("balance:", caller.balance);
-//         if (fees * 2 > caller.balance) {
-//             console.log("balance not enough to cover this path : ", caller.balance);
-//             return;
-//         } else {
-//             vm.startBroadcast(pk);
-//             c23.send{value: fees}(id, true, 11);
-//             vm.stopBroadcast();
-//         }
-//         console.log("tx ends .. check on arbi chain");
-//     }
-// }
+        json = vm.readFile("./L0_refrences/refrences.json");
+        chainid = uint16(vm.parseJsonUint(json,string.concat(".testnet.",network,".chainId")));
+    }
+   
+}
+
+

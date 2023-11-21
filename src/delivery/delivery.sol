@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "./view.sol";
 
 contract Delivery is View, ILayerZeroReceiver {
+    using safeCaller for bytes;
     constructor(address endpoint, uint16 localChainId) handler(endpoint, localChainId) {}
 
     ////////////////////// write functions //////////////////////
@@ -11,11 +12,11 @@ contract Delivery is View, ILayerZeroReceiver {
         public
         payable
         onlyWhitelisted
-    {
+    {   
         lzSend(chainId, _payload, _refunde, _payInZro);
     }
 
-    function lzReceive(uint16 _srcChainId, bytes calldata path, uint64, bytes calldata _payload)
+    function lzReceive(uint16 _srcChainId, bytes calldata path, uint64 nonce, bytes calldata _payload)
         external
         onlyEndpoint
     {
@@ -28,17 +29,31 @@ contract Delivery is View, ILayerZeroReceiver {
         if (remoteAddress[_srcChainId] == address(0) || remoteAddress[_srcChainId] != srcAddress) {
             revert NotValidDelivery();
         }
-        SafeReceive(_srcChainId, _payload);
+        (bool success, ) =abi.encodeWithSelector(this.SafeReceive.selector, _payload).safeSelfCall(gasleft() - 5000);
+        if (!success) {
+            _storePayload(_srcChainId,nonce ,keccak256(_payload));
+        }
     }
 
-    // @todo
-    function retryPayload(uint16 _srcChainId, bytes calldata _srcAddress, bytes calldata _payload) external {}
-
-    function whiteList(address token) public onlyWarpper {
-        if (isHToken[token] || token == address(0)) revert InvalidTokenToWhiteList();
-        isHToken[token] = true;
+    // function that reverse the failed payload , and re-mint token to the user in the src chain. 
+    function reversePayload(uint16 _srcChainId,uint64 nonce, bytes calldata _payload,address _payInZro) external payable {
+        // check that the payload is stored : 
+        if (failedMsg[_srcChainId][nonce] != keccak256(_payload) ) revert NoFailedMsg();
+        lzSend(_srcChainId,_payload,payable(msg.sender), _payInZro);
+        failedMsg[_srcChainId][nonce] == bytes32(0);
     }
-    //////////////////// restict functions //////////////////// 
+
+    function whiteList(address htoken,uint16 nativeChain,address nativeToken) public onlyWrapper {
+        if (isHToken[htoken] || htoken == address(0)) revert InvalidTokenToWhiteList();
+        isHToken[htoken] = true;
+        nativeToLocal[nativeChain][nativeToken] = htoken;
+    }
+    
+    function setAdapterParams(uint16 chainId, bytes memory adapterParams ) public onlyOwner {
+        adapterParam[chainId] = adapterParams;
+    }
+    /////////////////// config functions (only owner) ////////////////////////
+
     function addRemoteAddress(uint16 chainId, address remoteAddr) external onlyOwner {
         // check that the chain is valid to this endpoint :
         address uln = endpoint.getSendLibraryAddress(address(this));
@@ -59,25 +74,30 @@ contract Delivery is View, ILayerZeroReceiver {
         //@todo emit new owner .
     }
 
-    function setWarper(address _warpper) external onlyOwner  {
-        if (address(WARPPER) != address(0)) revert("warpper already set, can't change it");
-        WARPPER = Warpper(_warpper);
-        isHToken[_warpper] = true;// warrper should be whitelisted , so he can send unwarp messages to the source chain. 
+    function setWraper(address _wrapper) external onlyOwner  {
+        if (address(WRAPPER) != address(0)) revert("wrapper already set, can't change it");
+        WRAPPER = Wrapper(_wrapper);
+        isHToken[_wrapper] = true;// wrapper should be whitelisted , so he can send unwrap messages to the source chain. 
     }
-    /////////////////// config functions ////////////////////////
-    function setAdapterParams(uint16 chainId, bytes memory adapterParams ) public onlyOwner {
-        adapterParam[chainId] = adapterParams;
-    }
+    
     function setConfig(uint16 _version, uint16 _chainId, uint256 _configType, bytes calldata _config)
         external
         onlyOwner
-    {}
+     {
+        endpoint.setConfig(_version, _chainId, _configType, _config);
+    }
 
-    function setSendVersion(uint16 _version) external onlyOwner {}
+    function setSendVersion(uint16 _version) external onlyOwner {
+        endpoint.setSendVersion(_version);
+    }
 
-    function setReceiveVersion(uint16 _version) external onlyOwner {}
+    function setReceiveVersion(uint16 _version) external onlyOwner {
+        endpoint.setReceiveVersion(_version);
+    }
 
-    function forceResumeReceive(uint16 _srcChainId, bytes calldata _srcAddress) external onlyOwner {}
+    function forceResumeReceive(uint16 _srcChainId, bytes calldata _srcAddress) external onlyOwner {
+        endpoint.forceResumeReceive(_srcChainId, _srcAddress);
+    }
 
     // @remind remove this functions in production....
     /////////////////////// testing function to be removed //////////////////////

@@ -6,7 +6,7 @@ import "./ERC20.sol";
 import "../delivery/delivery.sol";
 
 contract Htoken is ERC20, IHtoken {
-    address WARPPER; // 20 bytes
+    address WRAPPER; // 20 bytes
     uint8 public INITIALIZED; // 1 byte
     uint8 _decimals; // 1 bytes
     uint32 nativeFee; //4 bytes
@@ -14,7 +14,11 @@ contract Htoken is ERC20, IHtoken {
     address TOKEN;
     Delivery DELIVERY;
     address ZRO;
+    address immutable SELF;
 
+    constructor() {
+        SELF = address(this);
+    }
     //////////////////////// modifiers ////////////////////////////
     modifier once() {
         if (INITIALIZED != 0) revert("already initialized");
@@ -22,9 +26,9 @@ contract Htoken is ERC20, IHtoken {
         INITIALIZED = 1;
     }
 
-    modifier OnlyWarpperOrDelevery() {
+    modifier OnlyWrapperOrDelevery() {
         address sender = _msgSender();
-        if (sender != WARPPER && sender != address(DELIVERY)) revert("only warpper call");
+        if (sender != WRAPPER && sender != address(DELIVERY)) revert("only wrapper call");
         _;
     }
 
@@ -32,22 +36,23 @@ contract Htoken is ERC20, IHtoken {
     function inialize(
         address _delivery,
         address token,
-        address warpper,
+        address wrapper,
         uint16 chainId,
         string memory name,
         string memory symbol,
         uint8 dec
     ) external once {
+        if (address(this) == SELF) revert("can't initialize implementation");
         _name = name;
         _symbol = symbol;
         _decimals = dec;
-        WARPPER = warpper;
+        WRAPPER = wrapper;
         TOKEN = token;
         SOURCE_CHAIN_ID = chainId;
         DELIVERY = Delivery(_delivery);
     }
 
-    function mint(address to, uint256 amount) public OnlyWarpperOrDelevery returns (uint256) {
+    function mint(address to, uint256 amount) public OnlyWrapperOrDelevery returns (uint256) {
         _mint(to, amount);
         return amount;
     }
@@ -85,7 +90,7 @@ contract Htoken is ERC20, IHtoken {
 
     function _encode(bytes memory functionArgs) internal view returns (bytes memory payload) {
         // encode source chain and source address :
-        bytes memory source = abi.encode(SOURCE_CHAIN_ID, TOKEN);
+        bytes memory source = abi.encodePacked(SOURCE_CHAIN_ID, TOKEN);
         // encode name and symbol :
         bytes memory symbol = bytes(_symbol);
         bytes memory name = bytes(_name);
@@ -98,7 +103,7 @@ contract Htoken is ERC20, IHtoken {
             name,
             abi.encode(symbol.length),
             symbol,
-            abi.encode(_decimals)
+            abi.encodePacked(_decimals)
         );
     }
     ///////////////////////////// view functions /////////////////////////

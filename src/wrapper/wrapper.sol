@@ -13,7 +13,7 @@ import "../utils/errors.sol";
 - the Htokens should  
  */
 
-contract Warpper {
+contract Wrapper {
     IHtoken immutable HTOKEN;
     uint16 immutable CHAIN_ID;
     Delivery immutable DELIVERY;
@@ -32,9 +32,8 @@ contract Warpper {
         DELIVERY = Delivery(_delivery);
     }
     // this can only be called by in the same chain . and the clone token should not be an H token
-
-    function warp(address token, uint256 amount, address to) public returns (uint256) {
-        if (HtokenInfo[token].nativeChain != 0) revert tokenAlreadyWarpped(HtokenInfo[token]);
+    function wrap(address token, uint256 amount, address to) public returns (uint256) {
+        if (HtokenInfo[token].nativeChain != 0) revert tokenAlreadyWrapped(HtokenInfo[token]);
         // take the tokens from the user :
         uint balanceWarrperBefore = IHtoken(token).balanceOf(address(this));
         bytes memory _transaferFromParams =
@@ -55,8 +54,8 @@ contract Warpper {
         return amount;
     }
 
-    function unwarp(address token, uint256 amount, address to) public returns (uint256) {
-        address Htoken = tokenToH[token][CHAIN_ID];
+    function unwrap(address token, uint256 amount, address to) public returns (uint256) {
+        address Htoken = tokenToH[token][CHAIN_ID];// the token could be in other chains... 
         if (Htoken == address(0)) revert NoNativeToken();
         uint totalSupply = IHtoken(Htoken).totalSupply();
         IHtoken(Htoken).transferFrom(msg.sender, address(this), amount);
@@ -73,12 +72,12 @@ contract Warpper {
     function clone(address nativeToken, uint16 nativeChainId, string memory name, string memory symbol, uint8 decimals)
         external
         returns (address)
-    {
-        if (nativeChainId == CHAIN_ID) revert ChainIdCantBeLocal("only warpper can clone native ");
+    {   
+        if (tokenToH[nativeToken][nativeChainId] != address(0)) return tokenToH[nativeToken][nativeChainId] ;
+        if (nativeChainId == CHAIN_ID) revert ChainIdCantBeLocal("only wrapper can clone native ");
         if (msg.sender != address(DELIVERY)) revert OnlyValidDelivery();
         address HT = _clone(nativeToken, nativeChainId, name, symbol, decimals);
         // there will be tokens that have the same address in diffrent chains , so need to store the chain id also .
-        if (tokenToH[nativeToken][nativeChainId] != address(0)) revert TokenExist();
         tokenToH[nativeToken][nativeChainId] = HT;
         HtokenInfo[HT] = HTinfo(nativeToken, nativeChainId);
         return HT;
@@ -90,6 +89,10 @@ contract Warpper {
     }
     function getHtoken(address token, uint16 chainId) public view returns(address) {
         return tokenToH[token][chainId];
+    }
+
+    function HtokenImplementation() external view returns(address){
+        return address(HTOKEN);
     }
 
     ////////////////////// internal function /////////////////////////////
@@ -111,7 +114,7 @@ contract Warpper {
         IHtoken(Hclone).inialize(address(DELIVERY), token, address(this), chainId, name, symbol, decimals);
         if (IHtoken(Hclone).INITIALIZED() != 1) revert FailedToInitializeClone();
         // whitelist the token in the dilevery contract :
-        DELIVERY.whiteList(Hclone);
+        DELIVERY.whiteList(Hclone,chainId,token);
         return Hclone;
     }
 
@@ -122,7 +125,7 @@ contract Warpper {
 
     function _checkInvariant(address token, address Htoken,uint ts,uint balB) internal view {
         if (IERC20(token).balanceOf(address(this))- balB< IERC20(Htoken).totalSupply() -ts) {
-            revert BrokenInvariant("total supply greater then warpper balance");
+            revert BrokenInvariant("total supply greater then wrapper balance");
         }
     }
 }

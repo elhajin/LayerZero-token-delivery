@@ -6,7 +6,7 @@ struct HTinfo {
     uint16 nativeChain;
 }
 
-error OnlyWarpper();
+error OnlyWrapper();
 error InvalidTokenToWhiteList();
 error PayloadExceedsSizeLimit();
 error NotValidDistanation();
@@ -23,5 +23,8 @@ error failedToCreateClone();
 error BrokenInvariant(string Err);
 error ChainIdCantBeLocal(string reason);
 error OnlyValidDelivery();
-error tokenAlreadyWarpped(HTinfo HtokenInfo );
+error tokenAlreadyWrapped(HTinfo HtokenInfo );
 error TokenExist();
+error OnlyLocalTokens(HTinfo Htoken_info);
+error NoFailedMsg();
+error FailedToMint();

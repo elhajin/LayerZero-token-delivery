@@ -7,7 +7,7 @@ import {LZEndpointMock}from "../mocks/endpointMock.sol";
 import {ERC20} from "../../src/Htoken/ERC20.sol";
 import "../../src/delivery/delivery.sol";
 import "../../src/Htoken/Htoken.sol";
-import "../../src/warpper/warpper.sol";
+import "../../src/wrapper/wrapper.sol";
 contract token is ERC20 {
     constructor(string memory name ,string memory symbol){
         _name = name;
@@ -30,8 +30,8 @@ contract SetUp is Test {
     Htoken htoken;
     Delivery delivery1;
     Delivery delivery2;
-    Warpper warpper1;
-    Warpper warpper2; 
+    Wrapper wrapper1;
+    Wrapper wrapper2; 
     address user1 = makeAddr("bob");
     address user2 = makeAddr("alice");
     address user3 = makeAddr("vika");
@@ -52,17 +52,17 @@ contract SetUp is Test {
         token1.mint(user2,1000000 ether );
         token2.mint(user2,1000000 ether);
         vm.startPrank(user1);
-        token1.approve(address(warpper1),type(uint).max);
-        token2.approve(address(warpper1),type(uint).max);
-        token1.approve(address(warpper2),type(uint).max);
-        token2.approve(address(warpper2),type(uint).max);
+        token1.approve(address(wrapper1),type(uint).max);
+        token2.approve(address(wrapper1),type(uint).max);
+        token1.approve(address(wrapper2),type(uint).max);
+        token2.approve(address(wrapper2),type(uint).max);
         vm.startPrank(user2);
-        token1.approve(address(warpper1),type(uint).max);
-        token2.approve(address(warpper1),type(uint).max);
-        token1.approve(address(warpper2),type(uint).max);
-        token2.approve(address(warpper2),type(uint).max);
-        vm.label(address(warpper1),"warpper1");
-        vm.label(address(warpper2),"warpper2");
+        token1.approve(address(wrapper1),type(uint).max);
+        token2.approve(address(wrapper1),type(uint).max);
+        token1.approve(address(wrapper2),type(uint).max);
+        token2.approve(address(wrapper2),type(uint).max);
+        vm.label(address(wrapper1),"wrapper1");
+        vm.label(address(wrapper2),"wrapper2");
         vm.label(address(endpoint1),"endpoint1");
         vm.label(address(endpoint2),"endpoint2");
         vm.label(address(token1),"token1");
@@ -84,12 +84,12 @@ contract SetUp is Test {
 
         // deploy token : 
         htoken = new Htoken();
-        // deploy warpper :
-        warpper1 = new Warpper(address(htoken),chainId1,address(delivery1));
-        warpper2 = new Warpper(address(htoken),chainId2,address(delivery2));
-        // set up warpper for each delivery : 
-        delivery1.setWarper(address(warpper1));
-        delivery2.setWarper(address(warpper2));
+        // deploy Wrapper :
+        wrapper1 = new Wrapper(address(htoken),chainId1,address(delivery1));
+        wrapper2 = new Wrapper(address(htoken),chainId2,address(delivery2));
+        // set up Wrapper for each delivery : 
+        delivery1.setWraper(address(wrapper1));
+        delivery2.setWraper(address(wrapper2));
         // set remote delivery addresses .. : 
         delivery1.test_addRemoteAddress(chainId2,address(delivery2));
         delivery2.test_addRemoteAddress(chainId1,address(delivery1));
