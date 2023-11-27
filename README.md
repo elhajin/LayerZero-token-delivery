@@ -4,19 +4,25 @@
 - [What is an Htoken❓](#what-is-an-htoken)
     - [Key Features:](#key-features)
 - [Protocol architecture :](#protocol-architecture-)
-  - [wrapper :](#wrapper-)
-    - [1. Wrapping Process:](#1-wrapping-process)
+- [1. Wrapper contract:](#1-wrapper-contract)
+  - [1. Functions :](#1-functions-)
     - [1.1. Wrap Function:](#11-wrap-function)
     - [1.2. Clone Function (Restricted to Delivery Contract):](#12-clone-function-restricted-to-delivery-contract)
-    - [1.3. Token Agnosticism:](#13-token-agnosticism)
-    - [2. Unwrapping Process:](#2-unwrapping-process)
-    - [2.1. Unwrap Function:](#21-unwrap-function)
-  - [The Wrapper Contract's sophisticated design and functions form the cornerstone of the protocol, providing users with a robust mechanism for cross-chain transformation while maintaining the integrity of their assets.](#the-wrapper-contracts-sophisticated-design-and-functions-form-the-cornerstone-of-the-protocol-providing-users-with-a-robust-mechanism-for-cross-chain-transformation-while-maintaining-the-integrity-of-their-assets)
-  - [Htoken: Advanced ERC-20 with Cross-Chain Functionality](#htoken-advanced-erc-20-with-cross-chain-functionality)
-  - [1. Cross-Chain Send and SendFrom Functions:](#1-cross-chain-send-and-sendfrom-functions)
+    - [1.3. Unwrap Function:](#13-unwrap-function)
+  - [2. key points :](#2-key-points-)
+- [2. Htoken contract :](#2-htoken-contract-)
+  - [1. Functions:](#1-functions)
     - [1.1. Send Function:](#11-send-function)
-    - [1.2. Estimate Transfer Fee Function:](#12-estimate-transfer-fee-function)
+    - [1.2. estimateTransferFee Function:](#12-estimatetransferfee-function)
     - [1.3. SendFrom Function:](#13-sendfrom-function)
+  - [2. key points :](#2-key-points--1)
+- [3. Delivery Contract:](#3-delivery-contract)
+  - [1. Functions:](#1-functions-1)
+    - [1.1. Send Function:](#11-send-function-1)
+    - [1.2. lzReceive Function:](#12-lzreceive-function)
+    - [1.3. reversePayload Function:](#13-reversepayload-function)
+    - [1.4. whiteList Function:](#14-whitelist-function)
+  - [3. Key Points:](#3-key-points)
   - [run tests :](#run-tests-)
   - [deployment :](#deployment-)
     - [Setup :](#setup-)
@@ -26,91 +32,256 @@
 
 **Htoken**, short for Hawk Token, represents a revolutionary leap in decentralized finance (DeFi), offering token holders unparalleled cross-chain mobility and advanced functionalities.
 
-At its core, an Htoken is a transformed version of any existing token, referred to as the "native token." Leveraging cutting-edge layer 0 technology, Htoken introduces a seamless and efficient cross-chain transfer mechanism. With just one transaction, Htoken holders can navigate across different blockchain ecosystems.
+At its core, an Htoken is a transformed version of any existing token, referred to as the **native token** Leveraging cutting-edge `layerzero` messaging technology, [Htokens](./src/Htoken/Htoken.sol) introduces a seamless and efficient cross-chain transfer mechanism. With just one transaction, Htoken holders can navigate across different blockchain ecosystems.
 
 ### Key Features:
 
-1.  **Layer 0 Cross-Chain Transfer:**
+1.  **Cross-Chain Transfer:**
 
-Htoken harnesses layer 0 technology to simplify and expedite cross-chain transfers. This innovative approach enables users to effortlessly move their assets across different blockchain networks, all within a single transaction.
+- [Htokens](./src/Htoken/Htoken.sol) harnesses `layerzero` messaging technology to simplify and expedite cross-chain transfers.
 
 2.  **Wrap and Unwrap Mechanism:**
 
-The process of transforming a native token into an Htoken is known as "wrapping." This action encapsulates the native token within the Hawk protocol, unlocking its cross-chain potential. Conversely, Htoken holders can opt to "unwrap" their tokens, converting them back to their native form. This unwrapping process is limited to the native chain where the original token contract resides, ensuring security and integrity.
+- to transfor a `native token` into an [Htokens](./src/Htoken/Htoken.sol) you should [wrap](./src/wrapper/wrapper.sol).
+- by wrapping the native token the user will get the same wrapped amount of the Corresponding [Htokens](./src/Htoken/Htoken.sol).
+- if there is no corresponding [Htokens](./src/Htoken/Htoken.sol) for this native token. the [wrap](./src/wrapper/wrapper.sol) contract will create one, and mint to the user the Equivalent amount being wrapped .
+- Conversely, [Htokens](./src/Htoken/Htoken.sol) holders can [unwrap](./src/wrapper/wrapper.sol) their tokens, converting them back to their native form. This unwrapping process is limited to the native chain where the original token contract resides.
 
 3.  **Full ERC-20 Compatibility:**
 
-Htoken is designed with full compatibility with the ERC-20 standard. It inherits all the familiar functionalities of an ERC-20 token, making it easy to integrate into existing DeFi applications and platforms. Additionally, Htoken incorporates specialized functions to facilitate cross-chain transfers, akin to the capabilities of other interoperable tokens.
-
-4.  **Empowering Token Holders:**
-
-Htoken holders gain unparalleled flexibility in navigating the evolving landscape of blockchain networks. Seeking optimal transaction fees, faster confirmation times, or specific network features becomes a seamless process. With the autonomy to choose the most suitable blockchain for their needs, Htoken holders redefine the possibilities of decentralized finance.
-
-Unlock the potential of your tokens, transcend blockchain boundaries, and embrace a new era of financial flexibility with Htoken. Join us on this journey as we reshape the landscape of decentralized finance, introducing a seamless cross-chain experience with the power of layer 0 technology.
+- [Htokens](./src/Htoken/Htoken.sol) is designed with full compatibility with the ERC-20 standard. making it easy to integrate into existing DeFi applications and platforms.
+- Additionally, Htoken incorporates specialized functions to facilitate cross-chain transfers.
 
 # Protocol architecture :
 
-## wrapper :
+# 1. [Wrapper](./src/wrapper/wrapper.sol) contract:
 
-The **Wrapper Contract** serves as a pivotal component of the protocol, orchestrating the seamless wrapping and unwrapping of native tokens to and from their corresponding Htoken forms. This intelligent contract not only facilitates the creation of Htokens but also ensures a secure and streamlined cross-chain experience for users.
+- The **Wrapper Contract** serves as a pivotal component of the protocol, orchestrating the seamless wrapping and unwrapping of native tokens to and from their corresponding Htoken forms.
+- The contract facilitates the creation of [Htokens](./src/Htoken/Htoken.sol) when the token being wrapped no exist yet.
+- the wrapper contract will hold the native tokens.
 
-### 1. Wrapping Process:
+## 1. Functions :
 
 ### 1.1. Wrap Function:
 
 Users initiate the wrapping process by calling the `wrap` function, specifying the native token they wish to convert into an Htoken, along with the desired amount. Prior to wrapping, users must approve the Wrapper Contract to spend the specified amount of the native token. Upon receiving approval, the Wrapper Contract performs the following steps:
 
 - Checks for the existence of an Htoken associated with the specified native token.
-- If an Htoken exists, mints an equivalent amount of Htokens to the user.
-- If no Htoken exists, creates a new Htoken by cloning and registering it with the native token. Only one Htoken can be created per native token.
-- Assigns metadata to the newly created Htoken, naming it with an 'H' prefix before the native token name and symbol. For instance, if the native token is named "Circle USD" with the symbol "USDC," the Htoken is named "HCircle USD" with the symbol "HUSDC."
+  - `If an Htoken exists`, mints an equivalent amount of Htokens to the user.
+  - `If no Htoken exists`, creates a new Htoken by cloning and registering it with the native token. Only one Htoken can be created per native token. Assigns metadata to the newly created Htoken, naming it with an `h` prefix before the native token `symbol` and `hawk` before `name`. For instance, if the native token is named "Circle USD" with the symbol "USDC," the Htoken is named "HCircle USD" with the symbol "HUSDC.", mints an equivalent amount of Htokens to the user.
+  ```.sol
+    function wrap(address token, uint256 amount, address to) public returns (uint256) {
+          if (HtokenInfo[token].nativeChain != 0) revert tokenAlreadyWrapped(HtokenInfo[token]);
+          // take the tokens from the user :
+          uint balanceWarrperBefore = IHtoken(token).balanceOf(address(this));
+          bytes memory _transaferFromParams =
+              abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), amount);
+          (bool success,) = _transaferFromParams.safeExternalCall(0, 0, token, 0);//no risk for tokens that do not revert on fail.
+          if (!success) revert FailedToTransferFrom(msg.sender);
+          address Htoken = tokenToH[token][CHAIN_ID];
+          if (Htoken == address(0)) {
+              (string memory name, string memory symbol) = _setHtokenMetadata(token);
+              Htoken = _clone(token, CHAIN_ID, name, symbol, IHtoken(token).decimals()); // deploy an Htoken for this new token.
+          }
+          uint totalSupply = IHtoken(Htoken).totalSupply();
+          // mint the user the token :
+          IHtoken(Htoken).mint(to, amount);
+          _checkInvariant(token,Htoken,balanceWarrperBefore, totalSupply);
+          return amount;
+    }
+  ```
 
 ### 1.2. Clone Function (Restricted to Delivery Contract):
 
-The Wrapper Contract includes a `clone` function, exclusively callable by the _Delivery_ contract, a key element we'll explore in the next section. This function enables the Delivery contract to create clones of Htokens when necessary, contributing to the protocol's efficiency and adaptability.
+- when an Htoken get sent to a another chain where there is not corresponding Htoken to it in this chain. which happend in the first crosschain transfer for a token to a new chain.the Htoken will be created , in the disnaction chain via [clone](./src/wrapper/wrapper.sol#L88) function .
+- this function is exclusively callable by the [delivery](./src/delivery/delivery.sol) contract, another contract will explore below . This function enables the [delivery](./src/delivery/delivery.sol) contract to create clones of Htokens when necessary.
+  ```solidity
+    function clone(address nativeToken, uint16 nativeChainId, string memory name, string memory symbol, uint8 decimals)
+        external
+        returns (address)
+    {
+        if (msg.sender != address(DELIVERY)) revert OnlyValidDelivery();
+        if (tokenToH[nativeToken][nativeChainId] != address(0)) return tokenToH[nativeToken][nativeChainId] ;
+        if (nativeChainId == CHAIN_ID) revert ChainIdCantBeLocal("only wrapper can clone native ");
+        address HT = _clone(nativeToken, nativeChainId, name, symbol, decimals);
+        return HT;
+    }
+  ```
+  > `Notice:` The Wrapper Contract is token-agnostic, supporting the wrapping of any ERC-20 token. However, it does not support ERC-20 tokens with fee-on-transfer mechanisms and rebasing tokens. Wrapping these token types may lead to potential user losses.
 
-### 1.3. Token Agnosticism:
+### 1.3. Unwrap Function:
 
-The Wrapper Contract is token-agnostic, supporting the wrapping of any ERC-20 token. However, it does not currently support ERC-20 tokens with fee-on-transfer mechanisms and rebasing tokens. Wrapping these token types may lead to potential user losses due to the unique characteristics of fee-on-transfer and rebasing mechanisms.
+- When Htoken holders wish to retrieve their native tokens, they can call the [unwrap](./src/wrapper/wrapper.sol#L64) function. This process results in the burning of Htokens and the subsequent transfer of native tokens back to the user.
+- This operation must occur on the native chain where the original token contract resides.
 
-### 2. Unwrapping Process:
+```solidity
+   function unwrap(address token, uint256 amount, address to) public returns (uint256) {
+       address Htoken = tokenToH[token][CHAIN_ID];// the token could be in other chains...
+       if (Htoken == address(0)) revert NoNativeToken();
+       uint totalSupply = IHtoken(Htoken).totalSupply();
+       IHtoken(Htoken).transferFrom(msg.sender, address(this), amount);
+       uint256 tokenAmt = IHtoken(Htoken).burn(address(this), IERC20(Htoken).balanceOf(address(this)));
+       // send token to the caller :
+       bytes memory _transferParams = abi.encodeWithSignature("transfer(address,uint256)", to, tokenAmt);
+       uint balanceBefore = IHtoken(token).balanceOf(address(this));
+       (bool success,) = _transferParams.safeExternalCall(0, 0, token, 0);
+       if (!success) revert FailedToTransferTokens();
+       if (balanceBefore - IHtoken(token).balanceOf(address(this)) > totalSupply -IHtoken(Htoken).totalSupply() ) revert BrokenInvariant("token amount sent greater then burned Htoken amount");
+       return tokenAmt;
+   }
+```
 
-### 2.1. Unwrap Function:
+## 2. key points :
 
-When Htoken holders wish to retrieve their native tokens, they can call the `unwrap` function within the Wrapper Contract. This process results in the burning of Htokens and the subsequent transfer of native tokens back to the user. This operation must occur on the native chain where the original token contract resides, ensuring the protocol's security and integrity.
+- The [Wrapper](./src/wrapper/wrapper.sol) contract should be deployed in each supported chain .
+- A native token should be have only one Htoken.
+- the [Wrapper](./src/wrapper/wrapper.sol) contract balance of a native token should be equal or greater then the crosschains supply of the Corresponding Htoken.
 
-## The Wrapper Contract's sophisticated design and functions form the cornerstone of the protocol, providing users with a robust mechanism for cross-chain transformation while maintaining the integrity of their assets.
+# 2. [Htoken](./src/Htoken/Htoken.sol) contract :
 
-## Htoken: Advanced ERC-20 with Cross-Chain Functionality
+- introduces enhanced ERC-20 functionalities tailored for cross-chain transfers, providing users with a powerful mechanism to send and receive tokens seamlessly across different blockchain networks.
 
-The **Htoken** introduces enhanced ERC-20 functionalities tailored for cross-chain transfers, providing users with a powerful mechanism to send and receive tokens seamlessly across different blockchain networks.
+## 1. Functions:
 
-## 1. Cross-Chain Send and SendFrom Functions:
+### 1.1. [Send](./src/Htoken/Htoken.sol#L67) Function:
 
-### 1.1. Send Function:
+- The `send` function is like `transfer` function of `erc20` but only for crosschain transfer,it allows users to initiate cross-chain of Htoken to an address located on a different blockchain. This function requires the following parameters:
 
-The `send` function allows users to initiate cross-chain transfers of Htokens to an address located on a different blockchain. This function requires the following parameters:
+```solidity
+  function send(uint16 chainId, address to, uint256 amount, bool _payInZro) external payable {
+       // burn token from user :
+       _burn(_msgSender(), amount);
+       _crossChainTransfer(chainId, to, amount, _payInZro);
+       emit Sending(address(this),chainId,msg.sender,to,amount);
+   }
+```
 
-- **Destination ChainId:** The unique identifier of the destination blockchain.
-- **To Address:** The recipient's address on the destination chain.
-- **Amount:** The quantity of Htokens to be sent.
+- To facilitate the cross-chain transfer, users must include a certain amount of native tokens (ETH or the native token of the local chain) as fees. The fee is crucial for covering gas costs in the distination chain. If the provided fee is insufficient, the call will revert; if it exceeds the required amount, users will receive a refund of the surplus.
 
-To facilitate the cross-chain transfer, users must include a certain amount of native tokens (ETH or the native token of the local chain) as fees. The fee is crucial for covering gas costs in the distination chain. If the provided fee is insufficient, the call will revert; if it exceeds the required amount, users will receive a refund of the surplus.
+### 1.2. [estimateTransferFee](./src/Htoken/Htoken.sol#L114) Function:
 
-### 1.2. Estimate Transfer Fee Function:
-
-To determine the required fee for a cross-chain transfer, users can utilize the `estimateTransferFee` function. This function provides an estimate of the native token fee needed for a successful cross-chain transfer, depending on the local chain's native token. The parameters include:
+- To determine the required fee for a cross-chain send, users can utilize the [estimateTransferFee](./src/Htoken/Htoken.sol#L114) function. This function provides an estimate of the native token fee needed for a successful cross-chain transfer, depending on the local chain's native token. The parameters include:
 
 - **Pay in ZRO (Zero Utility Token):** A boolean indicating whether the fee should be paid in the protocol's utility token (ZRO).
 - **Destination ChainId:** The unique identifier of the destination blockchain.
 - **To Address:** The recipient's address on the destination chain.
 - **Amount:** The quantity of Htokens to be sent.
 
-### 1.3. SendFrom Function:
+```solidity
+  function estimateTransferFee(bool payInZro, uint16 chainId, address to, uint256 amount)
+        public
+        view
+        returns (uint256 native, uint256 zro)
+    {
+        bytes memory _functionArgs = abi.encodeWithSelector(this.mint.selector, to, amount);
+        _functionArgs = _encode(_functionArgs);
+        (native, zro) = DELIVERY.estimateFees(chainId, _functionArgs, payInZro);
+    }
+```
 
-Similar to the `send` function, `sendFrom` allows a designated spender to initiate cross-chain transfers. The spender must be approved to spend Htokens on behalf of the sender through the typical ERC-20 approval process.
+### 1.3. [SendFrom](./src/Htoken/Htoken.sol#L74) Function:
 
--
+- Similar to the `send` function, `sendFrom` allows a designated spender to initiate cross-chain transfer like `transferFrom` function of `erc20` but for crosschain transfers. The spender must be approved to spend Htokens on behalf of the sender through the typical ERC-20 approval process.
+
+```solidity
+  function sendFrom(uint16 chainId, address from, address to, uint256 amount, bool _payInZro) external payable {
+       burn(from, amount);
+       _crossChainTransfer(chainId, to, amount, _payInZro);
+       emit Sending(address(this),chainId,from,to,amount);
+
+   }
+```
+
+## 2. key points :
+
+- when sending an Htoken to another chain, the Htoken amount to be sent get burned in the source chain, and minted in the distination chain.
+- you don't have to worry if the Htoken exist or not in the distination chain. if it doesn't a new one will be deployed.
+- for local interaction (in the same chain) Htoken behaves as a normal `ERC20` token.
+
+# 3. [Delivery](./src/delivery/delivery.sol) Contract:
+
+- The **[Delivery](./src/delivery/delivery.sol) Contract** plays a critical role in managing cross-chain communication within the Hawk Token protocol. It handles messages between chains, ensuring the smooth transfer of tokens from one chain to another. and the deployments of Htoken contracts for tokens that do not yet exist in the destination chain.(in the first transfer to a new chain)
+
+## 1. Functions:
+
+### 1.1. [Send](./src/delivery/delivery.sol#L11) Function:
+
+- Initiates the sending process, allowing the Delivery Contract to forward messages to the specified destination chain.
+- Callable only by whitelisted htokens to ensure security.
+  ```solidity
+   function Send(uint16 chainId, bytes calldata _payload, address payable _refunde, address _payInZro)
+        public
+        payable
+        onlyWhitelisted
+    {
+        lzSend(chainId, _payload, _refunde, _payInZro);
+    }
+  ```
+
+### 1.2. [lzReceive](./src/delivery/delivery.sol#L19) Function:
+
+- Handles the reception of messages from another chain.
+- Verifies the validity of the delivery source and processes the payload accordingly.
+- If the payload execution fails, stores the payload for potential reversal.
+
+```solidity
+  function lzReceive(uint16 _srcChainId, bytes calldata path, uint64 nonce, bytes calldata _payload)
+        external
+        onlyEndpoint
+    {
+        bytes memory _path = path;
+        address srcAddress;
+        assembly {
+            srcAddress := mload(add(_path, 20))
+        }
+        //  path from non valid delivery should be blocked .
+        if (remoteAddress[_srcChainId] == address(0) || remoteAddress[_srcChainId] != srcAddress) {
+            revert NotValidDelivery();
+        }
+        (bool success, ) =abi.encodeWithSelector(this.SafeReceive.selector, _payload).safeSelfCall(gasleft() - 5000);
+        if (!success) {
+            bytes32 payloadHash =keccak256(_payload);
+            _storePayload(_srcChainId,nonce ,payloadHash);
+            emit StoredPayload(_srcChainId,nonce,payloadHash);
+        }
+
+    }
+```
+
+### 1.3. [reversePayload](./src/delivery/delivery.sol#L42) Function:
+
+- when there is a stored payload that's means that the token get burned from _source chain_ but fieled to be minted in the distanation.Reverses a failed payload reminting tokens to the user in the source chain to insure that the user will not lost his tokens if the crosschain transfer fail.
+
+```solidity
+  function reversePayload(uint16 _srcChainId,uint64 nonce, bytes calldata _payload,address _payInZro) external payable {
+        // check that the payload is stored :
+        bytes32 payloadHash = keccak256(_payload);
+        if (failedMsg[_srcChainId][nonce] != payloadHash ) revert NoFailedMsg();
+        lzSend(_srcChainId,_payload,payable(msg.sender), _payInZro);
+        failedMsg[_srcChainId][nonce] == bytes32(0);
+        emit ReversePayload(_srcChainId,payloadHash);
+    }
+```
+
+### 1.4. [whiteList](./src/delivery/delivery.sol#L51) Function:
+
+- Whitelists Htoken contracts, associating them with their native tokens and native chain.
+- Automatically whitelists Htokens created through the Wrapper contract. Only the Wrapper contract can whitelist an Htoken.
+
+```solidity
+ function whiteList(address htoken,uint16 nativeChain,address nativeToken) public onlyWrapper {
+        if (isHToken[htoken] || htoken == address(0)) revert InvalidTokenToWhiteList();
+        isHToken[htoken] = true;
+        nativeToLocal[nativeChain][nativeToken] = htoken;
+    }
+```
+
+## 3. Key Points:
+
+- The [Delivery Contract](./src/delivery/delivery.sol) is responsible for managing cross-chain communication and deploying Htoken contracts in the destination chain where they don't exist yet.
+- The `lzReceive` function processes incoming messages and stores failed payloads for potential reversal.
+- The `reversePayload` function allows the reversal of failed crosschain action, reminting tokens to users in the source chain that they get burned.
+- Whenever an Htoken is created through the Wrapper contract, it automatically gets whitelisted, and only the Wrapper contract can whitelist an Htoken.
 
 ## run tests :
 

@@ -4,10 +4,15 @@ import {safeCaller} from "../utils/safeCaller.sol";
 import "../interfaces/L0_interfaces.sol";
 import "../wrapper/wrapper.sol";
 import "../utils/errors.sol";
+import "../utils/events.sol";
+abstract contract handler is Events  {
+    using safeCaller for bytes;
 
-abstract contract handler   {
+    // Maximum data to be copied from returndata in an external call
     uint32 constant MAX_RETURN_DATA_COPY = 0;
+    //local chain id (layerzero chain id is different from real chain id ) . 
      uint16 immutable LOCAL_CHAIN_ID;
+     // the layerzero endpoint in the local chain :
     ILayerZeroEndpoint immutable endpoint;
     mapping(uint16 chainId => address remoteAddress) remoteAddress;
     // mapping that stores the failed self call
@@ -16,39 +21,30 @@ abstract contract handler   {
     mapping(uint16 chainId => uint256 size) payloadSizeLimit;
     // mapping that stores the adopterParams for each chain: 
     mapping(uint16 chainId => bytes adapterParam) adapterParam;
-    /////// access control //////////
     address  _owner;
-    /////// protocol vars //////////
     // wrapper contract in the local chain. 
     Wrapper  WRAPPER;
     // mapping that stores the whiteListed tokens ;
     mapping (address token => bool ) isHToken;
-    // maping stores the local Token for each nativeToken and source id. 
+    //map from the native chain id and the native token address to it's htoken in the local chain. 
     mapping (uint16 chainId =>mapping( address nativeToken => address localTokenAddress)) nativeToLocal;
 
-
-    using safeCaller for bytes;
     modifier onlySelf() {
         if (msg.sender != address(this)) revert("only self call");
         _;
     }
-
     modifier onlyEndpoint() {
         if (msg.sender != address(endpoint)) revert("only endpoint call");
         _;
     }
-
     modifier onlyOwner() {
         if (msg.sender != _owner) revert("only owner call");
         _;
     }
-
-     // only whitelisted tokens should be able to call send : 
     modifier onlyWhitelisted(){
         if (!isHToken[_msgSender()] ) revert OnlyWhiteListedTokens();
         _;
     }
-    // only wraper contract should be able to set a whitelist token
     modifier  onlyWrapper {
         if (_msgSender() != address(WRAPPER)) revert OnlyWrapper();
         _;
@@ -58,7 +54,6 @@ abstract contract handler   {
         _owner = msg.sender;
         LOCAL_CHAIN_ID = _localChainId;
     }
-    // @todo emit an even here when the call is sucusse
     function SafeReceive(  bytes calldata payload) external onlySelf   {
         (bytes memory funcArg,uint16 nativeChain,address nativeToken,string memory name, string memory symbol,uint8 decimals) = _decodePaylod(payload);
          address localToken =nativeToLocal[nativeChain][nativeToken] ;
@@ -66,17 +61,16 @@ abstract contract handler   {
           localToken =  WRAPPER.clone(nativeToken,nativeChain,name,symbol,decimals);
         }
         if (!isHToken[localToken]) revert  OnlyWhiteListedTokens();
-        (bool success,) = _externalcall(0,funcArg,gasleft(),localToken);
+        (bool success,) = funcArg.safeExternalCall(0,gasleft(),localToken,0);
         if (!success) revert FailedToMint();
+        emit  Received(nativeToken,nativeChain,localToken);
     }
-    //@todo emit an event here
     function lzSend(
         uint16 chainId,
         bytes calldata _payload,
         address payable _refunde,
         address _zroPaymentAddress
      ) internal {
-        // @todo : you should store the local token if it's not stored .. 
         if(remoteAddress[chainId] == address(0)) revert NotValidDistanation();
         // calculate the path :
         bytes memory path = abi.encodePacked(remoteAddress[chainId], address(this));
@@ -107,12 +101,6 @@ abstract contract handler   {
         failedMsg[chainId][nonce] = hashPayload;
     }
 
-    function _externalcall(uint32 maxDataCopy, bytes memory _calldata, uint256 _gas, address callee)
-        internal
-        returns (bool, bytes memory)
-     {
-        return _calldata.safeExternalCall(maxDataCopy, _gas, callee, 0);
-    }
 
     function _msgSender() internal view returns (address) {
         return msg.sender;

@@ -6,23 +6,19 @@ import "../interfaces/L0_interfaces.sol";
 import "../utils/safeCaller.sol";
 import "../delivery/delivery.sol";
 import "../utils/errors.sol";
-/*
-- any one can warp and unwarp the token .
-- the router bridge will call this warpper contract to warp token and send it to another chain .
-- the Htokens are unwarped only where they get warpped . 
-- the Htokens should  
- */
+
 
 contract Wrapper {
-    IHtoken immutable HTOKEN;
-    uint16 immutable CHAIN_ID;
-    Delivery immutable DELIVERY;
-    uint32 constant MAX_DATA_COPY = 200;
-
     using safeCaller for bytes;
-    //mapping that stores a realToken to his Htoken (warper)
-
+    // implementation contract of a standard Htoken
+    IHtoken immutable HTOKEN;
+    // local chain id 
+    uint16 immutable CHAIN_ID;
+    // the local delivery contract 
+    Delivery immutable DELIVERY;
+    //map from nativeToken -> chainId = Htoken . in loacal chain. 
     mapping(address => mapping(uint16 => address)) tokenToH;
+    // map from Htoken to it's info (native token , native chain)
     mapping(address Htoken => HTinfo) HtokenInfo;
 
 
@@ -31,21 +27,26 @@ contract Wrapper {
         CHAIN_ID = _chainId;
         DELIVERY = Delivery(_delivery);
     }
-    // this can only be called by in the same chain . and the clone token should not be an H token
+    /**
+     * @dev wrap only a native token in the local chain, holds the native token and mint to the user Htokens
+     * @notice rebasing tokens and token with fee on transfer may cause lose of funds 
+     * @notice it should be only one Htoken for each native token. 
+     * @param token the native token to be wrapped 
+     * @param amount the amount of native token to be wrapped .
+     * @param to the receipient of Htoken .
+     */
     function wrap(address token, uint256 amount, address to) public returns (uint256) {
         if (HtokenInfo[token].nativeChain != 0) revert tokenAlreadyWrapped(HtokenInfo[token]);
         // take the tokens from the user :
         uint balanceWarrperBefore = IHtoken(token).balanceOf(address(this));
         bytes memory _transaferFromParams =
             abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), amount);
-        (bool success,) = _transaferFromParams.safeExternalCall(0, 0, token, 0);
+        (bool success,) = _transaferFromParams.safeExternalCall(0, 0, token, 0);//no risk for tokens that do not revert on fail.
         if (!success) revert FailedToTransferFrom(msg.sender);
         address Htoken = tokenToH[token][CHAIN_ID];
         if (Htoken == address(0)) {
             (string memory name, string memory symbol) = _setHtokenMetadata(token);
             Htoken = _clone(token, CHAIN_ID, name, symbol, IHtoken(token).decimals()); // deploy an Htoken for this new token.
-            tokenToH[token][CHAIN_ID] = Htoken; // store the token.
-            HtokenInfo[Htoken] = HTinfo(token, CHAIN_ID); // store htoken info .
         }
         uint totalSupply = IHtoken(Htoken).totalSupply();
         // mint the user the token :
@@ -53,7 +54,13 @@ contract Wrapper {
         _checkInvariant(token,Htoken,balanceWarrperBefore, totalSupply);
         return amount;
     }
-
+    /**
+     * @dev unwrap a Htoke to get the native token.called will get the same amount of Native token.
+     * @param token the Htoken to be unwrapped to 
+     * @param amount the amount of Htoken to unwrapped
+     * @param to the receipient address of native token
+     * @notice only can unwrap a token in it's native chain. 
+     */
     function unwrap(address token, uint256 amount, address to) public returns (uint256) {
         address Htoken = tokenToH[token][CHAIN_ID];// the token could be in other chains... 
         if (Htoken == address(0)) revert NoNativeToken();
@@ -65,21 +72,27 @@ contract Wrapper {
         uint balanceBefore = IHtoken(token).balanceOf(address(this));
         (bool success,) = _transferParams.safeExternalCall(0, 0, token, 0);
         if (!success) revert FailedToTransferTokens();
-        if (balanceBefore - IHtoken(token).balanceOf(address(this)) > totalSupply -IHtoken(Htoken).totalSupply() ) revert BrokenInvariant("total supply greater then warpper balance");
+        if (balanceBefore - IHtoken(token).balanceOf(address(this)) > totalSupply -IHtoken(Htoken).totalSupply() ) revert BrokenInvariant("token amount sent greater then burned Htoken amount");
         return tokenAmt;
     }
 
+    /**
+     * @dev called by the delivery contract to clone a non existing Htoken in this chain, of a native token in forgein chain
+     * @param nativeToken the native token to be cloned
+     * @param nativeChainId the native chainId of the token to be cloned
+     * @param name name of Htoken in src chain 
+     * @param symbol symbol of Htoken in src chain
+     * @param decimals decimals of Htoken(same as native token) in src chain
+     * @return the address of the cloned token. Htoken.
+     */
     function clone(address nativeToken, uint16 nativeChainId, string memory name, string memory symbol, uint8 decimals)
         external
         returns (address)
     {   
+        if (msg.sender != address(DELIVERY)) revert OnlyValidDelivery();
         if (tokenToH[nativeToken][nativeChainId] != address(0)) return tokenToH[nativeToken][nativeChainId] ;
         if (nativeChainId == CHAIN_ID) revert ChainIdCantBeLocal("only wrapper can clone native ");
-        if (msg.sender != address(DELIVERY)) revert OnlyValidDelivery();
         address HT = _clone(nativeToken, nativeChainId, name, symbol, decimals);
-        // there will be tokens that have the same address in diffrent chains , so need to store the chain id also .
-        tokenToH[nativeToken][nativeChainId] = HT;
-        HtokenInfo[HT] = HTinfo(nativeToken, nativeChainId);
         return HT;
     }
 
@@ -95,8 +108,15 @@ contract Wrapper {
         return address(HTOKEN);
     }
 
+    function delivery() external view returns(address){
+        return address(DELIVERY);
+    }
+
     ////////////////////// internal function /////////////////////////////
 
+    /**
+     * @dev create a clone of a native token and whitelist the new htoken 
+     */
     function _clone(address token, uint16 chainId, string memory name, string memory symbol, uint8 decimals)
         internal
         returns (address)
@@ -115,14 +135,24 @@ contract Wrapper {
         if (IHtoken(Hclone).INITIALIZED() != 1) revert FailedToInitializeClone();
         // whitelist the token in the dilevery contract :
         DELIVERY.whiteList(Hclone,chainId,token);
+        // store the new Htoken : 
+         tokenToH[token][chainId] = Hclone;
+        HtokenInfo[Hclone] = HTinfo(token, chainId);
         return Hclone;
     }
 
     function _setHtokenMetadata(address token) internal view returns (string memory name, string memory symbol) {
         name = string.concat("Hawk ", IHtoken(token).name());
-        symbol = string.concat("H", IHtoken(token).symbol());
+        symbol = string.concat("h", IHtoken(token).symbol());
     }
 
+    /**
+     * @dev check that the given native token by the user is greater of equal the minted Htoken.
+     * @param token the native token.
+     * @param Htoken the cloned Htoken for the given native token. 
+     * @param ts total supply of Htoken before wrapping
+     * @param balB balance of address(this) before wrapping
+     */
     function _checkInvariant(address token, address Htoken,uint ts,uint balB) internal view {
         if (IERC20(token).balanceOf(address(this))- balB< IERC20(Htoken).totalSupply() -ts) {
             revert BrokenInvariant("total supply greater then wrapper balance");

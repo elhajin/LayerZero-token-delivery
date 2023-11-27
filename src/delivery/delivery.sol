@@ -31,16 +31,21 @@ contract Delivery is View, ILayerZeroReceiver {
         }
         (bool success, ) =abi.encodeWithSelector(this.SafeReceive.selector, _payload).safeSelfCall(gasleft() - 5000);
         if (!success) {
-            _storePayload(_srcChainId,nonce ,keccak256(_payload));
+            bytes32 payloadHash =keccak256(_payload);
+            _storePayload(_srcChainId,nonce ,payloadHash);
+            emit StoredPayload(_srcChainId,nonce,payloadHash);
         }
+
     }
 
     // function that reverse the failed payload , and re-mint token to the user in the src chain. 
     function reversePayload(uint16 _srcChainId,uint64 nonce, bytes calldata _payload,address _payInZro) external payable {
         // check that the payload is stored : 
-        if (failedMsg[_srcChainId][nonce] != keccak256(_payload) ) revert NoFailedMsg();
+        bytes32 payloadHash = keccak256(_payload);
+        if (failedMsg[_srcChainId][nonce] != payloadHash ) revert NoFailedMsg();
         lzSend(_srcChainId,_payload,payable(msg.sender), _payInZro);
         failedMsg[_srcChainId][nonce] == bytes32(0);
+        emit ReversePayload(_srcChainId,payloadHash);
     }
 
     function whiteList(address htoken,uint16 nativeChain,address nativeToken) public onlyWrapper {

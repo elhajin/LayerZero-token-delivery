@@ -4,13 +4,13 @@ pragma solidity ^0.8.20;
 import "../interfaces/IHtoken.sol";
 import "./ERC20.sol";
 import "../delivery/delivery.sol";
-
-contract Htoken is ERC20, IHtoken {
+import "../utils/events.sol";
+contract Htoken is ERC20, IHtoken ,Events{
     address WRAPPER; // 20 bytes
     uint8 public INITIALIZED; // 1 byte
     uint8 _decimals; // 1 bytes
     uint32 nativeFee; //4 bytes
-    uint16 SOURCE_CHAIN_ID; // 2bytes
+    uint16 NATIVE_CHAINID; // 2bytes
     address TOKEN;
     Delivery DELIVERY;
     address ZRO;
@@ -36,7 +36,7 @@ contract Htoken is ERC20, IHtoken {
     function inialize(
         address _delivery,
         address token,
-        address wrapper,
+        address _wrapper,
         uint16 chainId,
         string memory name,
         string memory symbol,
@@ -46,10 +46,11 @@ contract Htoken is ERC20, IHtoken {
         _name = name;
         _symbol = symbol;
         _decimals = dec;
-        WRAPPER = wrapper;
+        WRAPPER = _wrapper;
         TOKEN = token;
-        SOURCE_CHAIN_ID = chainId;
+        NATIVE_CHAINID = chainId;
         DELIVERY = Delivery(_delivery);
+        emit Initialized(token,address(this));
     }
 
     function mint(address to, uint256 amount) public OnlyWrapperOrDelevery returns (uint256) {
@@ -67,11 +68,14 @@ contract Htoken is ERC20, IHtoken {
         // burn token from user :
         _burn(_msgSender(), amount);
         _crossChainTransfer(chainId, to, amount, _payInZro);
+        emit Sending(address(this),chainId,msg.sender,to,amount);
     }
 
     function sendFrom(uint16 chainId, address from, address to, uint256 amount, bool _payInZro) external payable {
         burn(from, amount);
         _crossChainTransfer(chainId, to, amount, _payInZro);
+        emit Sending(address(this),chainId,from,to,amount);
+
     }
 
     //////////////////////// internal function /////////////////////////
@@ -85,12 +89,11 @@ contract Htoken is ERC20, IHtoken {
         if (msg.value < native) revert InsufficientNativeFee(native);
         //[sc] if msg.sender dosn't except eth and there is a refund send to him . this will never success.
         DELIVERY.Send{value: msg.value}(chainId, payload, payable(_msgSender()), zroPayer);
-        //@todo emit en event here .
     }
 
     function _encode(bytes memory functionArgs) internal view returns (bytes memory payload) {
         // encode source chain and source address :
-        bytes memory source = abi.encodePacked(SOURCE_CHAIN_ID, TOKEN);
+        bytes memory source = abi.encodePacked(NATIVE_CHAINID, TOKEN);
         // encode name and symbol :
         bytes memory symbol = bytes(_symbol);
         bytes memory name = bytes(_name);
@@ -116,6 +119,22 @@ contract Htoken is ERC20, IHtoken {
         bytes memory _functionArgs = abi.encodeWithSelector(this.mint.selector, to, amount);
         _functionArgs = _encode(_functionArgs);
         (native, zro) = DELIVERY.estimateFees(chainId, _functionArgs, payInZro);
+    }
+
+    function delivery() public view returns(address) {
+        return address(DELIVERY);
+    }
+
+    function wrapper() public view returns(address){
+        return address(WRAPPER);
+    }
+
+    function nativeToken() public view returns(address){
+        return TOKEN;
+    }
+
+    function nativeChain() public view returns(uint16){
+        return NATIVE_CHAINID;
     }
 
     function decimals() public view override returns (uint8) {
